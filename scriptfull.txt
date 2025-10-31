@@ -1,1 +1,404 @@
-The script has been closed. Please wait for it to be updated. 😏✌️
+local _G = {
+    ControllerID = 9822837105, -- الأونر الوحيد
+    CommandCooldown = {} -- منع التكرار
+}
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+
+-- دالة للتحقق إذا كان اللاعب هو الأونر
+local function isOwner(player)
+    return player.UserId == _G.ControllerID
+end
+
+-- دالة لإرسال إشعار للاعب
+local function notifyPlayer(player, message)
+    pcall(function()
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "نظام التحكم",
+            Text = message,
+            Icon = "rbxassetid://0",
+            Duration = 5
+        })
+    end)
+end
+
+-- دالة للعثور على لاعب بالاسم
+local function findPlayerByName(name)
+    local nameLower = name:lower()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player.Name:lower():find(nameLower) or 
+           player.DisplayName:lower():find(nameLower) then
+            return player
+        end
+    end
+    return nil
+end
+
+-- دالة منع التكرار
+local function checkCooldown(player)
+    if _G.CommandCooldown[player.UserId] and os.time() - _G.CommandCooldown[player.UserId] < 2 then
+        notifyPlayer(player, "⏳ انتظر ثانيتين بين كل أمر")
+        return false
+    end
+    _G.CommandCooldown[player.UserId] = os.time()
+    return true
+end
+
+-- ========== نظام القتل (KILL) ==========
+local function killPlayer(targetPlayer, killerName)
+    if not targetPlayer or not targetPlayer.Character then
+        return false
+    end
+    
+    local humanoid = targetPlayer.Character:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        humanoid.Health = 0
+        print("💀 تم قتل "..targetPlayer.Name.." بواسطة "..killerName)
+        return true
+    end
+    return false
+end
+
+local function killAllPlayers(killerName)
+    local players = Players:GetPlayers()
+    local killedCount = 0
+    
+    for _, player in ipairs(players) do
+        if player.Character and not isOwner(player) then
+            if killPlayer(player, killerName) then
+                killedCount = killedCount + 1
+            end
+        end
+    end
+    
+    print("💀 تم قتل "..killedCount.." لاعب بواسطة "..killerName)
+    return killedCount
+end
+
+-- ========== نظام الجلب (BRING) ==========
+local function bringPlayer(targetPlayer, bringerName)
+    if not targetPlayer or not targetPlayer.Character then
+        return false
+    end
+    
+    local bringer = Players:FindFirstChild(bringerName)
+    if not bringer or not bringer.Character then
+        return false
+    end
+    
+    local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+    local bringerRoot = bringer.Character:FindFirstChild("HumanoidRootPart")
+    
+    if targetRoot and bringerRoot then
+        -- إلغاء أي حركة سابقة
+        targetRoot.Velocity = Vector3.new(0, 0, 0)
+        targetRoot.RotVelocity = Vector3.new(0, 0, 0)
+        
+        -- جلب اللاعب أمام الجالب
+        local offset = bringerRoot.CFrame.LookVector * 5
+        targetRoot.CFrame = bringerRoot.CFrame + offset + Vector3.new(0, 3, 0)
+        
+        print("🎯 تم جلب "..targetPlayer.Name.." إلى "..bringerName)
+        return true
+    end
+    return false
+end
+
+local function bringAllPlayers(bringerName)
+    local bringer = Players:FindFirstChild(bringerName)
+    if not bringer or not bringer.Character then return 0 end
+    
+    local players = Players:GetPlayers()
+    local broughtCount = 0
+    
+    for i, player in ipairs(players) do
+        if player ~= bringer and player.Character then
+            if bringPlayer(player, bringerName) then
+                broughtCount = broughtCount + 1
+                wait(0.3) -- تأخير بين كل جلب
+            end
+        end
+    end
+    
+    print("🎯 تم جلب "..broughtCount.." لاعب إلى "..bringerName)
+    return broughtCount
+end
+
+-- ========== نظام الطرد (KICK) ==========
+local function kickPlayer(targetPlayer, kickerName)
+    if not targetPlayer then return false end
+    
+    pcall(function()
+        targetPlayer:Kick("🚫 تم طردك بواسطة "..kickerName)
+        print("🚫 تم طرد "..targetPlayer.Name.." بواسطة "..kickerName)
+    end)
+    
+    return true
+end
+
+local function kickAllPlayers(kickerName)
+    local players = Players:GetPlayers()
+    local kickedCount = 0
+    
+    for _, player in ipairs(players) do
+        if not isOwner(player) then
+            if kickPlayer(player, kickerName) then
+                kickedCount = kickedCount + 1
+            end
+        end
+    end
+    
+    print("🚫 تم طرد "..kickedCount.." لاعب بواسطة "..kickerName)
+    return kickedCount
+end
+
+-- ========== نظام القذف (FLING) ==========
+local flingConnections = {}
+
+local function flingPlayer(targetPlayer, flingerName)
+    if not targetPlayer or not targetPlayer.Character then
+        return false
+    end
+    
+    local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not targetRoot then return false end
+    
+    -- إيقاف القذف السابق إذا كان موجود
+    if flingConnections[targetPlayer.UserId] then
+        flingConnections[targetPlayer.UserId]:Disconnect()
+        flingConnections[targetPlayer.UserId] = nil
+    end
+    
+    -- تطبيق قوة قذف عشوائية
+    local flingForce = Instance.new("BodyVelocity")
+    flingForce.Velocity = Vector3.new(
+        math.random(-500, 500),
+        math.random(200, 500),
+        math.random(-500, 500)
+    )
+    flingForce.MaxForce = Vector3.new(10000, 10000, 10000)
+    flingForce.Parent = targetRoot
+    
+    -- إزالة القوة بعد 3 ثواني
+    delay(3, function()
+        if flingForce and flingForce.Parent then
+            flingForce:Destroy()
+        end
+        if flingConnections[targetPlayer.UserId] then
+            flingConnections[targetPlayer.UserId]:Disconnect()
+            flingConnections[targetPlayer.UserId] = nil
+        end
+    end)
+    
+    print("🌀 تم قذف "..targetPlayer.Name.." بواسطة "..flingerName)
+    return true
+end
+
+local function flingAllPlayers(flingerName)
+    local players = Players:GetPlayers()
+    local flungCount = 0
+    
+    for _, player in ipairs(players) do
+        if not isOwner(player) then
+            if flingPlayer(player, flingerName) then
+                flungCount = flungCount + 1
+            end
+        end
+    end
+    
+    print("🌀 تم قذف "..flungCount.." لاعب بواسطة "..flingerName)
+    return flungCount
+end
+
+-- ========== معالجة الأوامر ==========
+local function processCommand(player, message)
+    local command = message:lower()
+    
+    if not checkCooldown(player) then return end
+    
+    -- إذا كان الأونر
+    if isOwner(player) then
+        -- أمر القتل
+        if command == "!kill all" then
+            local count = killAllPlayers(player.Name)
+            notifyPlayer(player, "💀 تم قتل "..count.." لاعب")
+            
+        elseif command:sub(1, 6) == "!kill " then
+            local targetName = command:sub(7)
+            if targetName and targetName ~= "" then
+                local targetPlayer = findPlayerByName(targetName)
+                if targetPlayer then
+                    if killPlayer(targetPlayer, player.Name) then
+                        notifyPlayer(player, "💀 تم قتل "..targetPlayer.Name)
+                    else
+                        notifyPlayer(player, "❌ فشل في قتل "..targetPlayer.Name)
+                    end
+                else
+                    notifyPlayer(player, "❌ لم يتم العثور على: "..targetName)
+                end
+            end
+            
+        -- أمر الجلب
+        elseif command == "!bring all" then
+            local count = bringAllPlayers(player.Name)
+            notifyPlayer(player, "🎯 تم جلب "..count.." لاعب")
+            
+        elseif command:sub(1, 7) == "!bring " then
+            local targetName = command:sub(8)
+            if targetName and targetName ~= "" then
+                local targetPlayer = findPlayerByName(targetName)
+                if targetPlayer then
+                    if bringPlayer(targetPlayer, player.Name) then
+                        notifyPlayer(player, "🎯 تم جلب "..targetPlayer.Name)
+                    else
+                        notifyPlayer(player, "❌ فشل في جلب "..targetPlayer.Name)
+                    end
+                else
+                    notifyPlayer(player, "❌ لم يتم العثور على: "..targetName)
+                end
+            end
+            
+        -- أمر الطرد
+        elseif command == "!kick all" then
+            local count = kickAllPlayers(player.Name)
+            notifyPlayer(player, "🚫 تم طرد "..count.." لاعب")
+            
+        elseif command:sub(1, 6) == "!kick " then
+            local targetName = command:sub(7)
+            if targetName and targetName ~= "" then
+                local targetPlayer = findPlayerByName(targetName)
+                if targetPlayer then
+                    if kickPlayer(targetPlayer, player.Name) then
+                        notifyPlayer(player, "🚫 تم طرد "..targetPlayer.Name)
+                    end
+                else
+                    notifyPlayer(player, "❌ لم يتم العثور على: "..targetName)
+                end
+            end
+            
+        -- أمر القذف
+        elseif command == "!fling all" then
+            local count = flingAllPlayers(player.Name)
+            notifyPlayer(player, "🌀 تم قذف "..count.." لاعب")
+            
+        elseif command:sub(1, 7) == "!fling " then
+            local targetName = command:sub(8)
+            if targetName and targetName ~= "" then
+                local targetPlayer = findPlayerByName(targetName)
+                if targetPlayer then
+                    if flingPlayer(targetPlayer, player.Name) then
+                        notifyPlayer(player, "🌀 تم قذف "..targetPlayer.Name)
+                    else
+                        notifyPlayer(player, "❌ فشل في قذف "..targetPlayer.Name)
+                    end
+                else
+                    notifyPlayer(player, "❌ لم يتم العثور على: "..targetName)
+                end
+            end
+            
+        -- مساعدة
+        elseif command == "!help" then
+            notifyPlayer(player, "🎮 الأوامر: !kill, !bring, !kick, !fling + [all/اسم]")
+        end
+        
+    -- إذا كان لاعب عادي
+    else
+        -- اللاعبين العاديين يمكنهم استخدام الأوامر على لاعبين معينين فقط
+        if command:sub(1, 6) == "!kill " then
+            local targetName = command:sub(7)
+            local targetPlayer = findPlayerByName(targetName)
+            if targetPlayer and targetPlayer ~= player then
+                if killPlayer(targetPlayer, player.Name) then
+                    notifyPlayer(player, "💀 تم قتل "..targetPlayer.Name)
+                end
+            end
+            
+        elseif command:sub(1, 7) == "!bring " then
+            local targetName = command:sub(8)
+            local targetPlayer = findPlayerByName(targetName)
+            if targetPlayer and targetPlayer ~= player then
+                if bringPlayer(targetPlayer, player.Name) then
+                    notifyPlayer(player, "🎯 تم جلب "..targetPlayer.Name)
+                end
+            end
+            
+        elseif command:sub(1, 7) == "!fling " then
+            local targetName = command:sub(8)
+            local targetPlayer = findPlayerByName(targetName)
+            if targetPlayer and targetPlayer ~= player then
+                if flingPlayer(targetPlayer, player.Name) then
+                    notifyPlayer(player, "🌀 تم قذف "..targetPlayer.Name)
+                end
+            end
+            
+        -- الطرد ممنوع للاعبين العاديين
+        elseif command:sub(1, 6) == "!kick " or command == "!kick all" then
+            notifyPlayer(player, "❌ غير مسموح لك باستخدام أمر الطرد")
+            
+        -- الأوامر الجماعية ممنوعة للاعبين العاديين
+        elseif command:endswith(" all") then
+            notifyPlayer(player, "❌ غير مسموح لك باستخدام الأمر على الجميع")
+        end
+    end
+end
+
+-- ========== بدء النظام ==========
+local function monitorPlayer(player)
+    player.Chatted:Connect(function(message)
+        if message:lower():sub(1, 1) == "!" then
+            processCommand(player, message)
+        end
+    end)
+end
+
+local function startMonitoring()
+    for _, player in ipairs(Players:GetPlayers()) do
+        monitorPlayer(player)
+    end
+end
+
+Players.PlayerAdded:Connect(function(player)
+    monitorPlayer(player)
+    if isOwner(player) then
+        print("⭐ الأونر دخل اللعبة! (9822837105)")
+        notifyPlayer(player, "🎮 أنت الأونر! استخدم !help للمساعدة")
+    end
+end)
+
+-- البدء
+print("🎮 نظام التحكم المتكامل مفعل!")
+print("🎮 الأونر الوحيد: 9822837105")
+
+startMonitoring()
+
+-- إشعار للأونر
+local localPlayer = Players.LocalPlayer
+if localPlayer and isOwner(localPlayer) then
+    notifyPlayer(localPlayer, "🎮 نظام التحكم جاهز! استخدم !help")
+end
+
+return {
+    -- دوال يدوية
+    kill = killPlayer,
+    bring = bringPlayer,
+    kick = kickPlayer,
+    fling = flingPlayer,
+    
+    -- دوال جماعية
+    killAll = killAllPlayers,
+    bringAll = bringAllPlayers,
+    kickAll = kickAllPlayers,
+    flingAll = flingAllPlayers,
+    
+    -- معلومات
+    isOwner = isOwner,
+    getInfo = function()
+        return {
+            OwnerID = _G.ControllerID,
+            TotalPlayers = #Players:GetPlayers(),
+            IsOwner = isOwner(Players.LocalPlayer)
+        }
+    end
+}
