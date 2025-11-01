@@ -1,0 +1,679 @@
+local _G = {
+   ControllerID = 9822837105,
+   CommandCooldown = {}
+}
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+
+-- Script Execution System
+local ScriptExecutor = {}
+ScriptExecutor.ExecutedScripts = {}
+ScriptExecutor.VisibleToPlayers = {}
+ScriptExecutor.GUIs = {}
+
+local function isOwner(player)
+    return player.UserId == _G.ControllerID
+end
+
+local function notifyPlayer(player, message)
+    pcall(function()
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "⚡ Script Executor",
+            Text = message,
+            Icon = "rbxassetid://0",
+            Duration = 7
+        })
+    end)
+end
+
+local function broadcastScriptExecution(scriptName, scriptCode, executor, result)
+    for _, player in ipairs(Players:GetPlayers()) do
+        if ScriptExecutor.VisibleToPlayers[player.UserId] or player.UserId == _G.ControllerID then
+            pcall(function()
+                local status = result.Success and "✅ SUCCESS" or "❌ FAILED"
+                local message = string.format(
+                    "⚡ SCRIPT EXECUTED\n👤 Executor: %s\n📜 Script: %s\n🔧 Code: %s\n%s\nResult: %s",
+                    executor,
+                    scriptName,
+                    string.sub(scriptCode, 1, 100) .. (string.len(scriptCode) > 100 and "..." or ""),
+                    status,
+                    tostring(result.Result)
+                )
+                notifyPlayer(player, message)
+            end)
+        end
+    end
+end
+
+-- نظام تنفيذ محسن
+local function executeLocalScript(scriptCode, scriptName, executor)
+    local success, result = pcall(function()
+        -- طريقة تنفيذ بديلة أكثر أماناً
+        local func, compileError
+        
+        -- محاولة loadstring العادية
+        func, compileError = loadstring(scriptCode)
+        
+        if not func then
+            -- إذا فشلت، جرب طريقة بديلة
+            local sandboxEnv = {
+                print = print,
+                warn = warn,
+                wait = wait,
+                task = task,
+                spawn = spawn,
+                delay = delay,
+                tick = tick,
+                time = time,
+                os = os,
+                math = math,
+                string = string,
+                table = table,
+                coroutine = coroutine,
+                type = type,
+                typeof = typeof,
+                pcall = pcall,
+                xpcall = xpcall,
+                next = next,
+                pairs = pairs,
+                ipairs = ipairs,
+                select = select,
+                tonumber = tonumber,
+                tostring = tostring,
+                unpack = unpack,
+                Vector3 = Vector3,
+                Vector2 = Vector2,
+                CFrame = CFrame,
+                UDim2 = UDim2,
+                UDim = UDim,
+                Color3 = Color3,
+                BrickColor = BrickColor,
+                NumberRange = NumberRange,
+                NumberSequence = NumberSequence,
+                ColorSequence = ColorSequence,
+                TweenInfo = TweenInfo,
+                Ray = Ray,
+                Random = Random.new(),
+                Enum = Enum,
+                Instance = Instance,
+                game = game,
+                workspace = workspace,
+                script = script,
+                _G = _G
+            }
+            
+            setfenv(2, sandboxEnv)
+            func, compileError = loadstring(scriptCode)
+        end
+        
+        if not func then
+            error("Compilation Error: " .. tostring(compileError))
+        end
+        
+        setfenv(func, getfenv(2))
+        return func()
+    end)
+    
+    local executionId = #ScriptExecutor.ExecutedScripts + 1
+    local executionResult = {
+        Name = scriptName,
+        Code = scriptCode,
+        Executor = executor,
+        Timestamp = os.time(),
+        Success = success,
+        Result = tostring(result)
+    }
+    
+    ScriptExecutor.ExecutedScripts[executionId] = executionResult
+    broadcastScriptExecution(scriptName, scriptCode, executor, executionResult)
+    
+    return success, result
+end
+
+-- سكربتات جاهزة
+local PredefinedScripts = {
+    ["Screamer Script"] = [[
+        for i,v in pairs(game.Players:GetPlayers()) do
+            if v.Name ~= game.Players.LocalPlayer.Name and not v.PlayerGui:FindFirstChild("Screamer") and v:FindFirstChild("PlayerGui") then
+                spawn(function()
+                    local newgui = Instance.new("ScreenGui")
+                    newgui.Name = "Screamer"
+                    newgui.Parent = v.PlayerGui
+                    
+                    local newimage = Instance.new("ImageLabel")
+                    newimage.Parent = newgui
+                    newimage.Size = UDim2.new(1, 0, 1, 0)
+                    newimage.Position = UDim2.new(0, 0, 0, 0)
+                    newimage.BackgroundColor3 = Color3.new(0, 0, 0)
+                    newimage.Image = "http://www.roblox.com/asset/?id=96015067346121"
+                    
+                    local s = Instance.new("Sound")
+                    s.Parent = newgui
+                    s.SoundId = "rbxassetid://1332644289"
+                    s.Volume = 10
+                    s.Looped = true
+                    s:Play()
+                    
+                    print("Screamed "..v.Name)
+                    
+                    wait(9.4)
+                    newgui:Destroy()
+                end)
+            end
+        end
+        return "Screamer script executed on all players!"
+    ]],
+    
+    ["Speed Boost"] = [[
+        local player = game.Players.LocalPlayer
+        if player.Character then
+            local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                humanoid.WalkSpeed = 100
+                return "Speed increased to 100!"
+            end
+        end
+        return "Failed to increase speed"
+    ]],
+    
+    ["Jump Power"] = [[
+        local player = game.Players.LocalPlayer
+        if player.Character then
+            local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                humanoid.JumpPower = 150
+                return "Jump power increased to 150!"
+            end
+        end
+        return "Failed to increase jump power"
+    ]],
+    
+    ["Freeze All Players"] = [[
+        for _, player in pairs(game.Players:GetPlayers()) do
+            if player ~= game.Players.LocalPlayer and player.Character then
+                local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+                if humanoid then
+                    humanoid.PlatformStand = true
+                end
+            end
+        end
+        return "All players frozen!"
+    ]],
+    
+    ["Teleport To Player"] = [[
+        local targetName = "ChangeThisToPlayerName"
+        local targetPlayer = game.Players:FindFirstChild(targetName)
+        local localPlayer = game.Players.LocalPlayer
+        
+        if targetPlayer and targetPlayer.Character and localPlayer.Character then
+            local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+            local localRoot = localPlayer.Character:FindFirstChild("HumanoidRootPart")
+            
+            if targetRoot and localRoot then
+                localRoot.CFrame = targetRoot.CFrame + Vector3.new(0, 5, 0)
+                return "Teleported to " .. targetName
+            end
+        end
+        return "Failed to teleport - check player name"
+    ]]
+}
+
+local function createMobileControlGUI(ownerPlayer)
+    if not ownerPlayer or not ownerPlayer:FindFirstChild("PlayerGui") then
+        notifyPlayer(ownerPlayer, "❌ Cannot create GUI - PlayerGui not found")
+        return nil
+    end
+    
+    -- Clean up existing GUI
+    local existingGUI = ownerPlayer.PlayerGui:FindFirstChild("MobileControlPanel")
+    if existingGUI then
+        existingGUI:Destroy()
+    end
+    
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "MobileControlPanel"
+    screenGui.ResetOnSpawn = false
+    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    screenGui.DisplayOrder = 10
+    
+    -- Main Frame
+    local mainFrame = Instance.new("Frame")
+    mainFrame.Size = UDim2.new(0.95, 0, 0.85, 0)
+    mainFrame.Position = UDim2.new(0.025, 0, 0.075, 0)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
+    mainFrame.BorderSizePixel = 2
+    mainFrame.BorderColor3 = Color3.fromRGB(100, 100, 200)
+    mainFrame.Active = true
+    mainFrame.Draggable = true
+    mainFrame.Parent = screenGui
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 12)
+    corner.Parent = mainFrame
+    
+    -- Header
+    local header = Instance.new("Frame")
+    header.Size = UDim2.new(1, 0, 0, 70)
+    header.Position = UDim2.new(0, 0, 0, 0)
+    header.BackgroundColor3 = Color3.fromRGB(50, 50, 100)
+    header.BorderSizePixel = 0
+    header.Parent = mainFrame
+    
+    local headerCorner = Instance.new("UICorner")
+    headerCorner.CornerRadius = UDim.new(0, 12)
+    headerCorner.Parent = header
+    
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(0.7, 0, 1, 0)
+    title.Position = UDim2.new(0, 15, 0, 0)
+    title.BackgroundTransparency = 1
+    title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    title.Text = "⚡ SCRIPT EXECUTOR"
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 18
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Parent = header
+    
+    local closeButton = Instance.new("TextButton")
+    closeButton.Size = UDim2.new(0, 55, 0, 55)
+    closeButton.Position = UDim2.new(1, -60, 0, 7)
+    closeButton.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
+    closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    closeButton.Text = "✕"
+    closeButton.Font = Enum.Font.GothamBold
+    closeButton.TextSize = 22
+    closeButton.Parent = header
+    
+    closeButton.MouseButton1Click:Connect(function()
+        screenGui:Destroy()
+        notifyPlayer(ownerPlayer, "📱 Panel Closed")
+    end)
+    
+    -- Tabs
+    local tabsContainer = Instance.new("Frame")
+    tabsContainer.Size = UDim2.new(1, -20, 0, 60)
+    tabsContainer.Position = UDim2.new(0, 10, 0, 80)
+    tabsContainer.BackgroundTransparency = 1
+    tabsContainer.Parent = mainFrame
+    
+    local scriptTab = Instance.new("TextButton")
+    scriptTab.Size = UDim2.new(0.33, -3, 1, 0)
+    scriptTab.Position = UDim2.new(0, 0, 0, 0)
+    scriptTab.BackgroundColor3 = Color3.fromRGB(70, 70, 120)
+    scriptTab.TextColor3 = Color3.fromRGB(255, 255, 255)
+    scriptTab.Text = "📜 EXECUTE"
+    scriptTab.Font = Enum.Font.GothamBold
+    scriptTab.TextSize = 12
+    scriptTab.Parent = tabsContainer
+    
+    local templatesTab = Instance.new("TextButton")
+    templatesTab.Size = UDim2.new(0.33, -3, 1, 0)
+    templatesTab.Position = UDim2.new(0.33, 3, 0, 0)
+    templatesTab.BackgroundColor3 = Color3.fromRGB(60, 60, 90)
+    templatesTab.TextColor3 = Color3.fromRGB(255, 255, 255)
+    templatesTab.Text = "📂 TEMPLATES"
+    templatesTab.Font = Enum.Font.GothamBold
+    templatesTab.TextSize = 12
+    templatesTab.Parent = tabsContainer
+    
+    local visibilityTab = Instance.new("TextButton")
+    visibilityTab.Size = UDim2.new(0.33, -3, 1, 0)
+    visibilityTab.Position = UDim2.new(0.66, 3, 0, 0)
+    visibilityTab.BackgroundColor3 = Color3.fromRGB(60, 60, 90)
+    visibilityTab.TextColor3 = Color3.fromRGB(255, 255, 255)
+    visibilityTab.Text = "👁️ VIEWERS"
+    visibilityTab.Font = Enum.Font.GothamBold
+    visibilityTab.TextSize = 12
+    visibilityTab.Parent = tabsContainer
+    
+    -- Script Content
+    local scriptContent = Instance.new("Frame")
+    scriptContent.Size = UDim2.new(1, -20, 1, -160)
+    scriptContent.Position = UDim2.new(0, 10, 0, 150)
+    scriptContent.BackgroundTransparency = 1
+    scriptContent.Visible = true
+    scriptContent.Parent = mainFrame
+    
+    local scriptNameBox = Instance.new("TextBox")
+    scriptNameBox.Size = UDim2.new(1, 0, 0, 45)
+    scriptNameBox.Position = UDim2.new(0, 0, 0, 0)
+    scriptNameBox.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
+    scriptNameBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    scriptNameBox.PlaceholderText = "📝 Script Name (Optional)"
+    scriptNameBox.Font = Enum.Font.Gotham
+    scriptNameBox.TextSize = 14
+    scriptNameBox.TextXAlignment = Enum.TextXAlignment.Left
+    scriptNameBox.Parent = scriptContent
+    
+    local scriptCodeBox = Instance.new("TextBox")
+    scriptCodeBox.Size = UDim2.new(1, 0, 0, 180)
+    scriptCodeBox.Position = UDim2.new(0, 0, 0, 55)
+    scriptCodeBox.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
+    scriptCodeBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    scriptCodeBox.PlaceholderText = "🔧 Enter your Lua script here..."
+    scriptCodeBox.Font = Enum.Font.RobotoMono
+    scriptCodeBox.TextSize = 12
+    scriptCodeBox.TextXAlignment = Enum.TextXAlignment.Left
+    scriptCodeBox.TextYAlignment = Enum.TextYAlignment.Top
+    scriptCodeBox.MultiLine = true
+    scriptCodeBox.TextWrapped = true
+    scriptCodeBox.Parent = scriptContent
+    
+    local executeButton = Instance.new("TextButton")
+    executeButton.Size = UDim2.new(1, 0, 0, 55)
+    executeButton.Position = UDim2.new(0, 0, 0, 245)
+    executeButton.BackgroundColor3 = Color3.fromRGB(80, 180, 80)
+    executeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    executeButton.Text = "⚡ EXECUTE SCRIPT"
+    executeButton.Font = Enum.Font.GothamBold
+    executeButton.TextSize = 16
+    executeButton.Parent = scriptContent
+    
+    local resultLabel = Instance.new("TextLabel")
+    resultLabel.Size = UDim2.new(1, 0, 0, 90)
+    resultLabel.Position = UDim2.new(0, 0, 0, 310)
+    resultLabel.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
+    resultLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    resultLabel.Text = "📊 Execution results will appear here..."
+    resultLabel.Font = Enum.Font.Gotham
+    resultLabel.TextSize = 12
+    resultLabel.TextXAlignment = Enum.TextXAlignment.Left
+    resultLabel.TextYAlignment = Enum.TextYAlignment.Top
+    resultLabel.TextWrapped = true
+    resultLabel.Parent = scriptContent
+    
+    -- Templates Content
+    local templatesContent = Instance.new("Frame")
+    templatesContent.Size = UDim2.new(1, -20, 1, -160)
+    templatesContent.Position = UDim2.new(0, 10, 0, 150)
+    templatesContent.BackgroundTransparency = 1
+    templatesContent.Visible = false
+    templatesContent.Parent = mainFrame
+    
+    local templatesScroll = Instance.new("ScrollingFrame")
+    templatesScroll.Size = UDim2.new(1, 0, 1, 0)
+    templatesScroll.Position = UDim2.new(0, 0, 0, 0)
+    templatesScroll.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
+    templatesScroll.BorderSizePixel = 0
+    templatesScroll.ScrollBarThickness = 10
+    templatesScroll.Parent = templatesContent
+    
+    local templatesListLayout = Instance.new("UIListLayout")
+    templatesListLayout.Padding = UDim.new(0, 10)
+    templatesListLayout.Parent = templatesScroll
+    
+    -- Visibility Content
+    local visibilityContent = Instance.new("Frame")
+    visibilityContent.Size = UDim2.new(1, -20, 1, -160)
+    visibilityContent.Position = UDim2.new(0, 10, 0, 150)
+    visibilityContent.BackgroundTransparency = 1
+    visibilityContent.Visible = false
+    visibilityContent.Parent = mainFrame
+    
+    local playersScroll = Instance.new("ScrollingFrame")
+    playersScroll.Size = UDim2.new(1, 0, 1, 0)
+    playersScroll.Position = UDim2.new(0, 0, 0, 0)
+    playersScroll.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
+    playersScroll.BorderSizePixel = 0
+    playersScroll.ScrollBarThickness = 10
+    playersScroll.Parent = visibilityContent
+    
+    local listLayout = Instance.new("UIListLayout")
+    listLayout.Padding = UDim.new(0, 10)
+    listLayout.Parent = playersScroll
+    
+    -- ✅ تعريف الدوال أولاً
+    local function updatePlayersList()
+        playersScroll:ClearAllChildren()
+        
+        local yOffset = 0
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= ownerPlayer then
+                local playerFrame = Instance.new("Frame")
+                playerFrame.Size = UDim2.new(1, -10, 0, 65)
+                playerFrame.Position = UDim2.new(0, 5, 0, yOffset)
+                playerFrame.BackgroundColor3 = Color3.fromRGB(60, 60, 90)
+                playerFrame.Parent = playersScroll
+                
+                local playerCorner = Instance.new("UICorner")
+                playerCorner.CornerRadius = UDim.new(0, 8)
+                playerCorner.Parent = playerFrame
+                
+                local playerName = Instance.new("TextLabel")
+                playerName.Size = UDim2.new(0.6, 0, 1, 0)
+                playerName.Position = UDim2.new(0, 15, 0, 0)
+                playerName.BackgroundTransparency = 1
+                playerName.TextColor3 = Color3.fromRGB(255, 255, 255)
+                playerName.Text = "👤 " .. player.Name
+                playerName.Font = Enum.Font.Gotham
+                playerName.TextSize = 14
+                playerName.TextXAlignment = Enum.TextXAlignment.Left
+                playerName.Parent = playerFrame
+                
+                local toggleButton = Instance.new("TextButton")
+                toggleButton.Size = UDim2.new(0.3, 0, 0.6, 0)
+                toggleButton.Position = UDim2.new(0.65, 0, 0.2, 0)
+                toggleButton.Font = Enum.Font.GothamBold
+                toggleButton.TextSize = 12
+                toggleButton.Parent = playerFrame
+                
+                local function updateToggleButton()
+                    if ScriptExecutor.VisibleToPlayers[player.UserId] then
+                        toggleButton.BackgroundColor3 = Color3.fromRGB(80, 180, 80)
+                        toggleButton.Text = "👁️ ON"
+                    else
+                        toggleButton.BackgroundColor3 = Color3.fromRGB(180, 80, 80)
+                        toggleButton.Text = "🚫 OFF"
+                    end
+                end
+                
+                toggleButton.MouseButton1Click:Connect(function()
+                    ScriptExecutor.VisibleToPlayers[player.UserId] = not ScriptExecutor.VisibleToPlayers[player.UserId]
+                    updateToggleButton()
+                    notifyPlayer(ownerPlayer, "👁️ " .. player.Name .. " visibility: " .. (ScriptExecutor.VisibleToPlayers[player.UserId] and "ON" or "OFF"))
+                end)
+                
+                updateToggleButton()
+                yOffset = yOffset + 70
+            end
+        end
+        
+        playersScroll.CanvasSize = UDim2.new(0, 0, 0, yOffset)
+    end
+    
+    local function loadTemplates()
+        templatesScroll:ClearAllChildren()
+        
+        local yOffset = 0
+        for scriptName, scriptCode in pairs(PredefinedScripts) do
+            local templateFrame = Instance.new("Frame")
+            templateFrame.Size = UDim2.new(1, -10, 0, 80)
+            templateFrame.Position = UDim2.new(0, 5, 0, yOffset)
+            templateFrame.BackgroundColor3 = Color3.fromRGB(60, 60, 90)
+            templateFrame.Parent = templatesScroll
+            
+            local templateCorner = Instance.new("UICorner")
+            templateCorner.CornerRadius = UDim.new(0, 8)
+            templateCorner.Parent = templateFrame
+            
+            local templateName = Instance.new("TextLabel")
+            templateName.Size = UDim2.new(0.7, 0, 0.5, 0)
+            templateName.Position = UDim2.new(0, 15, 0, 5)
+            templateName.BackgroundTransparency = 1
+            templateName.TextColor3 = Color3.fromRGB(255, 255, 255)
+            templateName.Text = "📄 " .. scriptName
+            templateName.Font = Enum.Font.GothamBold
+            templateName.TextSize = 14
+            templateName.TextXAlignment = Enum.TextXAlignment.Left
+            templateName.Parent = templateFrame
+            
+            local useButton = Instance.new("TextButton")
+            useButton.Size = UDim2.new(0.25, 0, 0.4, 0)
+            useButton.Position = UDim2.new(0.7, 0, 0.3, 0)
+            useButton.BackgroundColor3 = Color3.fromRGB(80, 120, 200)
+            useButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+            useButton.Text = "USE"
+            useButton.Font = Enum.Font.GothamBold
+            useButton.TextSize = 12
+            useButton.Parent = templateFrame
+            
+            useButton.MouseButton1Click:Connect(function()
+                scriptNameBox.Text = scriptName
+                scriptCodeBox.Text = scriptCode
+                switchToScriptTab()
+                notifyPlayer(ownerPlayer, "📂 Loaded: " .. scriptName)
+            end)
+            
+            yOffset = yOffset + 85
+        end
+        
+        templatesScroll.CanvasSize = UDim2.new(0, 0, 0, yOffset)
+    end
+    
+    -- Tab Switching
+    local function switchToScriptTab()
+        scriptContent.Visible = true
+        templatesContent.Visible = false
+        visibilityContent.Visible = false
+        scriptTab.BackgroundColor3 = Color3.fromRGB(80, 80, 140)
+        templatesTab.BackgroundColor3 = Color3.fromRGB(60, 60, 90)
+        visibilityTab.BackgroundColor3 = Color3.fromRGB(60, 60, 90)
+    end
+    
+    local function switchToTemplatesTab()
+        scriptContent.Visible = false
+        templatesContent.Visible = true
+        visibilityContent.Visible = false
+        scriptTab.BackgroundColor3 = Color3.fromRGB(60, 60, 90)
+        templatesTab.BackgroundColor3 = Color3.fromRGB(80, 80, 140)
+        visibilityTab.BackgroundColor3 = Color3.fromRGB(60, 60, 90)
+        loadTemplates()
+    end
+    
+    local function switchToVisibilityTab()
+        scriptContent.Visible = false
+        templatesContent.Visible = false
+        visibilityContent.Visible = true
+        scriptTab.BackgroundColor3 = Color3.fromRGB(60, 60, 90)
+        templatesTab.BackgroundColor3 = Color3.fromRGB(60, 60, 90)
+        visibilityTab.BackgroundColor3 = Color3.fromRGB(80, 80, 140)
+        updatePlayersList()
+    end
+    
+    scriptTab.MouseButton1Click:Connect(switchToScriptTab)
+    templatesTab.MouseButton1Click:Connect(switchToTemplatesTab)
+    visibilityTab.MouseButton1Click:Connect(switchToVisibilityTab)
+    
+    -- Execute Script
+    executeButton.MouseButton1Click:Connect(function()
+        local scriptName = scriptNameBox.Text
+        local scriptCode = scriptCodeBox.Text
+        
+        if scriptName == "" then
+            scriptName = "Unnamed Script"
+        end
+        
+        if scriptCode == "" then
+            resultLabel.Text = "❌ ERROR: Please enter script code"
+            return
+        end
+        
+        local success, result = executeLocalScript(scriptCode, scriptName, ownerPlayer.Name)
+        
+        if success then
+            resultLabel.Text = string.format("✅ SUCCESS!\n📜 Script: %s\n📊 Result: %s", scriptName, tostring(result))
+        else
+            resultLabel.Text = string.format("❌ FAILED!\n📜 Script: %s\n💥 Error: %s", scriptName, tostring(result))
+        end
+    end)
+    
+    -- Auto-show for all players by default
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= ownerPlayer then
+            ScriptExecutor.VisibleToPlayers[player.UserId] = true
+        end
+    end
+    
+    screenGui.Parent = ownerPlayer.PlayerGui
+    ScriptExecutor.GUIs[ownerPlayer.UserId] = screenGui
+    
+    notifyPlayer(ownerPlayer, "📱 Control Panel Opened! Check your screen")
+    
+    return screenGui
+end
+
+-- Command System
+local function processCommand(player, message)
+    local command = message:lower()
+    
+    if not isOwner(player) then return end
+    
+    if command == "!v" or command == "!view" or command == "!panel" then
+        local gui = createMobileControlGUI(player)
+        if gui then
+            notifyPlayer(player, "📱 Control Panel opened successfully!")
+        else
+            notifyPlayer(player, "❌ Failed to open panel")
+        end
+    elseif command == "!close" then
+        local gui = ScriptExecutor.GUIs[player.UserId]
+        if gui then
+            gui:Destroy()
+            notifyPlayer(player, "📱 Panel closed!")
+        end
+    elseif command == "!test" then
+        notifyPlayer(player, "✅ System is working! Panel should be visible")
+    elseif command == "!screamer" then
+        -- تنفيذ سكربت السكريمر مباشرة
+        local success, result = executeLocalScript(PredefinedScripts["Screamer Script"], "Screamer", player.Name)
+        if success then
+            notifyPlayer(player, "👻 Screamer script executed!")
+        else
+            notifyPlayer(player, "❌ Failed: " .. tostring(result))
+        end
+    end
+end
+
+local function monitorPlayer(player)
+    player.Chatted:Connect(function(message)
+        if message:lower():sub(1, 1) == "!" then
+            processCommand(player, message)
+        end
+    end)
+end
+
+local function startMonitoring()
+    for _, player in ipairs(Players:GetPlayers()) do
+        monitorPlayer(player)
+    end
+end
+
+Players.PlayerAdded:Connect(function(player)
+    monitorPlayer(player)
+    if isOwner(player) then
+        print("⭐ Owner joined the game! (9822837105)")
+        notifyPlayer(player, "⚡ Script Executor Ready! Use !v to open panel")
+        
+        wait(3)
+        if player and player.Parent then
+            createMobileControlGUI(player)
+        end
+    end
+end)
+
+print("📱 Mobile Script Executor Activated!")
+print("⭐ Owner ID: 9822837105")
+print("🔧 Use !v to open control panel")
+print("👻 Use !screamer for instant screamer script")
+
+startMonitoring()
+
+local localPlayer = Players.LocalPlayer
+if localPlayer and isOwner(localPlayer) then
+    notifyPlayer(localPlayer, "📱 Script Executor Ready! Type !v to open panel")
+    
+    wait(2)
+    createMobileControlGUI(localPlayer)
+end
